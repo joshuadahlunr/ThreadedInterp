@@ -1,0 +1,249 @@
+import re
+from pathlib import Path
+
+def permutations(array_len=10, item_count=5):
+    # Initialize the current position as a list of zeros
+    current_permutation = [0] * array_len
+    
+    while True:
+        # Yield the current permutation
+        yield current_permutation[:]
+        
+        # Increment the last element of the permutation
+        for i in range(array_len - 1, -1, -1):
+            current_permutation[i] += 1
+            if current_permutation[i] < item_count:
+                break
+            current_permutation[i] = 0
+        else:
+            # If we exit the loop without breaking, we've exhausted all permutations
+            return
+
+def array_permutations(array_len, items):
+    perm_gen = permutations(array_len, len(items))
+    for perm in perm_gen:
+        yield [items[i] for i in perm]
+
+def check_val_before_non_val(val, array):
+    found = False
+    for item in array:
+        if item == val:
+            found = True
+        elif found and item != val:
+            # Found something other than "val" after "val"
+            return True
+    
+    # Return False if no non-"val" was found after "val"
+    return False
+
+def generate_apply_function_types(output, enum_entries, types, args_supported = 1):
+    template = "template<types Treturn"
+    for i in range(0, args_supported):
+        template += f", types Ta{i + 1} = types::Void"
+    template += ">"
+    output.append(template)
+    output.append("struct apply_function_types {")
+    output.append("\tstatic auto apply(void* func = nullptr) {")
+    first = True
+    for enums, types in zip(array_permutations(args_supported + 1, enum_entries), array_permutations(args_supported + 1, types)):
+        if check_val_before_non_val("Void", enums[1:]): continue
+        return_enum = enums[0]
+        return_type = types[0]
+        line = ("\t\tif" if first else "\t\telse if") + f" constexpr(Treturn == types::{return_enum}"; first = False
+        for i in range(1, len(enums)):
+            line += f" && Ta{i} == types::{enums[i]}"
+        line += f") return ({return_type}(*)("
+        firstArg = True
+        for t in types[1:]:
+            if t == "void": continue
+            if not firstArg: 
+                line += ", "
+            firstArg = False
+            line += t
+        line += "))func;"
+        output.append(line)
+    output.append("\t\telse static_assert(false, \"Unsupported argument combination\");")
+    output.append("\t}")
+    output.append("\tauto operator()(void* func = nullptr) { return apply(func); }")
+    output.append("")
+    output.append("\tusing type = decltype(apply(nullptr));")
+    output.append("};")
+
+def generate_no_args_call(output, enum_entries, types):
+    output.append("template<types Treturn>")
+    output.append("auto call(void* func) {")
+    output.append("\treturn apply_function_types<Treturn>{}(func)();")
+    output.append("}")
+    output.append("")
+    
+    for enum in enum_entries:
+       output.append(f"inline auto call_{enum.lower()}(void* func)" + " { " + f"return call<types::{enum}>(func);" + "}")
+
+def generate_one_args_call(output, enum_entries, types):
+    output.append("template<types Treturn, typename T1>")
+    output.append("auto call(void* func, types typeA1, T1 a1) {")
+    output.append("\tassert(typeA1 != types::Void);")
+    output.append("\tswitch (a1) {")
+    for enum in enum_entries:
+        if enum == "Void": continue
+        output.append(f"\t\tcase types::{enum}: return apply_function_types<Treturn, types::{enum}>" + "{}(func)(a1);")
+    output.append("\t\tdefault: assert(false && \"Unsupported argument combination\");")
+    output.append("\t}")
+    output.append("}")
+    output.append("")
+    
+    for ret in enum_entries:
+        output.append("template<typename T1>")
+        output.append(f"auto call_{ret.lower()}(void* func, types typeA1, T1 a1)" + " {")
+        output.append("\tswitch (typeA1) {")
+        for arg in enum_entries:
+            if enum == "Void": continue
+            output.append(f"\t\tcase types::{arg}: return apply_function_types<types::{ret}, types::{arg}>" + "{}(func, typeA1, a1);")
+        output.append("\t\tdefault: assert(false && \"Unsupported argument combination\");")
+        output.append("\t}")
+        output.append("}")
+
+def generate_n_args_call(output, enum_entries, types, n):
+    if n == 0: 
+        generate_no_args_call(output, enum_entries, types)
+        return
+    if n == 1:
+        generate_one_args_call(output, enum_entries, types)
+        return
+
+    line = "template<types Treturn"
+    for i in range(0, n):
+        line += f", typename T{i + 1}"
+    line += ">"
+    output.append(line)
+    line = "auto call(void* func"
+    for i in range(0, n):
+        line += f", types typeA{i + 1}, T{i + 1} a{i + 1}"
+    line += ") {"
+    output.append(line)
+    for i in range(0, n):
+        output.append(f"\tassert(typeA{i + 1} != types::Void);")
+    line = "\tswitch (magic_enum::enum_fuse(typeA1"
+    for i in range(1, n):
+        line += f", typeA{i + 1}"
+    line += ").value()) {"
+    output.append(line)
+    for enums in array_permutations(n, enum_entries):
+        if "Void" in enums: continue
+        line = f"\t\t case magic_enum::enum_fuse(types::{enums[0]}"
+        for enum in enums[1:]:
+            line += f", types::{enum}"
+        line += f").value(): return apply_function_types<Treturn, types::{enums[0]}"
+        for enum in enums[1:]:
+            line += f", types::{enum}"
+        line += ">{}(func)(a1"
+        for i in range(1, len(enums)):
+            line += f", a{i + 1}"
+        line += ");"
+        output.append(line)
+    output.append("\t\tdefault: assert(false && \"Unsupported argument combination\");")
+    output.append("\t}")
+    output.append("}")
+    output.append("")
+    
+    for ret in enum_entries:
+        line = "template<typename T1"
+        for i in range(1, n):
+            line += f", typename T{i + 1}"
+        line += ">"
+        output.append(line)
+        line = f"auto call_{ret.lower()}(void* func"
+        for i in range(0, n):
+            line += f", types typeA{i + 1}, T{i + 1} a{i + 1}"
+        line += ") {"
+        output.append(line)
+        line = "\tswitch (magic_enum::enum_fuse(typeA1"
+        for i in range(1, n):
+            line += f", typeA{i + 1}"
+        line += ").value()) {"
+        output.append(line)
+        for args in array_permutations(n, enum_entries):
+            if "Void" in args: continue
+            line = f"\t\tcase magic_enum::enum_fuse(types::{args[0]}"
+            for enum in args[1:]:
+                line += f", types::{enum}"
+            line += f").value(): return apply_function_types<types::{ret}, types::{args[0]}"
+            for enum in args[1:]:
+                line += f", types::{enum}"
+            line += ">{}(func, typeA1, a1"
+            for i in range(1, len(args)):
+                line += f", typeA{i + 1}, a{i + 1}"
+            line += ");"
+            output.append(line)
+        output.append("\t\tdefault: assert(false && \"Unsupported argument combination\");")
+        output.append("\t}")
+        output.append("}")
+
+def generate_calls(output, enum_entries, types, args_supported = 1):
+    template = "template<types Treturn"
+    for i in range(0, args_supported):
+        template += f", types Ta{i + 1} = types::Void"
+    template += ">"
+    output.append(template)
+    output.append("struct apply_function_types;")
+    output.append("")
+
+    for i in range(0, args_supported):
+        generate_n_args_call(output, enum_entries, types, i)
+        output.append("")
+
+def file_boilerplate(output):
+    output.append("#pragma once")
+    output.append("")
+    output.append("#include \"../magic_enum/include/magic_enum/magic_enum_all.hpp\"")
+    output.append("#include \"../types.hpp\"")
+    output.append("#include <cassert>")
+    output.append("")
+
+# Function to parse the file content
+def parse_enum_file(file_content):
+    # Regular expression pattern to match enum entry and its description
+    enum_pattern = r"(\w+)\s*,?\s*//\s*->\s*(\w+[\*]?)"
+    
+    # Arrays to store enum entries and types
+    enum_entries = []
+    types = []
+
+    # Find all matches using the regex pattern
+    matches = re.findall(enum_pattern, file_content)
+    
+    # Populate the arrays with the results
+    for match in matches:
+        enum_entries.append(match[0].strip())  # Enum entry (e.g., Void, Pointer)
+        types.append(match[1].strip())  # Description (e.g., void, void*)
+
+    return enum_entries, types
+
+with open("types.hpp", "r") as f:
+    enum_entries, types = parse_enum_file(f.read())
+
+print("Enum Entries:", enum_entries)
+print("Types:", types)
+
+supported_argument_count = 5
+output = []
+file_boilerplate(output)
+
+output.append("namespace mizu::ffi {\n")
+generate_apply_function_types(output, enum_entries, types, supported_argument_count)
+output.append("\n} // namespace mizu::ffi")
+
+Path("gen/").mkdir(parents=True, exist_ok=True)
+with open("gen/apply_function_types.hpp", "w") as f:
+    f.write("\n".join(output))
+
+
+output = []
+file_boilerplate(output)
+
+output.append("namespace mizu::ffi {\n")
+generate_calls(output, enum_entries, types, supported_argument_count)
+output.append("} // namespace mizu::ffi")
+
+with open("gen/calls.hpp", "w") as f:
+    f.write("\n".join(output))
