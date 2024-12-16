@@ -1,0 +1,40 @@
+#include "magic_enum/include/magic_enum/magic_enum_all.hpp"
+#include "types.hpp"
+#include <cassert>
+
+template<types Treturn, types Ta1 = types::Void>
+struct apply_function_types{
+	static auto apply(void* func = nullptr) {
+		if constexpr(Treturn == types::Void && Ta1 == types::Pointer) return (void(*)(void*))func;
+		else if constexpr(Treturn == types::Pointer && Ta1 == types::Pointer) return (void*(*)(void*))func;
+		else if constexpr(Treturn == types::Pointer && Ta1 == types::Void) return (void*(*)(void))func;
+		else static_assert(false, "Unsupported argument combination");
+	}
+	auto operator()(void* func = nullptr) { return apply(func); }
+
+	// using type = decltype(apply(nullptr));
+};
+
+template <types Treturn, typename T1>
+auto call_impl(void* func, types typeA1, T1 a1) {
+	assert(typeA1 != types::Void);
+	switch (a1) {
+		case types::I64: return trampoline_t<Treturn, types::I64>{}(func)(a1);
+		case types::F64: return trampoline_t<Treturn, types::F64>{}(func)(a1);
+		case types::I32: return trampoline_t<Treturn, types::I32>{}(func)(a1);
+		case types::F32: return trampoline_t<Treturn, types::F32>{}(func)(a1);
+		default: assert(false && "Unsupported argument combination");
+	}
+}
+
+template <typename T1>
+variant call(types typeReturn, void* func, types typeA1, T1 a1) {
+	switch(typeReturn) {
+		case types::Void: call_impl<types::Void, T1>(func, typeA1, a1); return {};
+		case types::I64: return call_impl<types::I64, T1>(func, typeA1, a1);
+		case types::F64: return call_impl<types::F64, T1>(func, typeA1, a1);
+		case types::I32: return call_impl<types::I32, T1>(func, typeA1, a1);
+		case types::F32: return call_impl<types::F32, T1>(func, typeA1, a1);
+		default: assert(false && "Unsupported Return Type");
+	}
+}

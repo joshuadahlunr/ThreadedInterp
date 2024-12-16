@@ -1,0 +1,385 @@
+#include <span>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <algorithm>
+#include <regex>
+
+// From: https://stackoverflow.com/a/1505791
+intmax_t pow_int(intmax_t x, size_t p) {
+	if (p == 0) return 1;
+	if (p == 1) return x;
+	
+	intmax_t tmp = pow_int(x, p/2);
+	if (p%2 == 0) return tmp * tmp;
+	else return x * tmp * tmp;
+}
+
+// Function to generate permutations
+std::vector<std::vector<size_t>> permutations(size_t array_len = 10, size_t item_count = 5) {
+	std::vector<std::vector<size_t>> result; result.reserve(pow_int(item_count, array_len));
+	std::vector<size_t> current_permutation(array_len, 0);
+
+	while (true) {
+		result.push_back(current_permutation);
+
+		// Increment the last element of the permutation and handle carry-over
+		for (size_t i = array_len - 1; i >= 0; --i) {
+			current_permutation[i]++;
+			if (current_permutation[i] < item_count) break;
+			current_permutation[i] = 0;
+			if (i == 0)
+				return result;  // All permutations generated
+		}
+	}
+
+	return result;  // Only reached if an early return hasn't occurred
+}
+
+template<typename T>
+std::vector<std::vector<T>> array_permutations(size_t array_len, const std::vector<T>& items) {
+	std::vector<std::vector<T>> result; result.reserve(pow_int(items.size(), array_len));
+
+	for (auto& perm : permutations(array_len, items.size())) {
+		std::vector<T> perm_result(array_len);
+		for (size_t i = 0; i < array_len; ++i) {
+			perm_result[i] = items[perm[i]];
+		}
+		result.emplace_back(std::move(perm_result)); // Move instead of copy.
+	}
+
+	return result;
+}
+
+// Function to check if a value appears before a non-value in an array
+template<typename T>
+bool check_val_before_non_val(const T& val, std::span<const T> array) {
+	bool found = false;
+	
+	for (const T& item : array)
+		if (item == val)
+			found = true;
+		else if (found && item != val)
+			// Found something other than "val" after "val"
+			return true;
+	
+	// Return false if no non-"val" was found after "val"
+	return false;
+}
+
+// Function to generate the trampoline
+void generate_trampoline(std::vector<std::string>& output, const std::vector<std::string>& enum_entries, const std::vector<std::string>& types, size_t args_supported = 1) {
+	// Start constructing the template
+	std::string template_str = "template <types Treturn";
+	for (size_t i = 0; i < args_supported; ++i)
+		template_str += ", types Ta" + std::to_string(i + 1) + " = types::Void";
+	template_str += ">";
+	output.push_back(template_str);
+	
+	// Start struct definition
+	output.push_back("struct trampoline_t {");
+	
+	// Start apply function
+	output.push_back("\tconstexpr static auto apply(void* func = nullptr) {");
+	
+	bool first = true;
+	// Generate permutations and process
+	auto enum_permutations = array_permutations(args_supported + 1, enum_entries);
+	auto type_permutations = array_permutations(args_supported + 1, types);
+	
+	for (size_t i = 0; i < enum_permutations.size(); ++i) {
+		const auto& enums = enum_permutations[i];
+		const auto& types_perm = type_permutations[i];
+		
+		// Skip invalid combinations (where "Void" appears before a non-"Void")
+		if (check_val_before_non_val<std::string>("Void", std::span{enums}.subspan(1))) continue;
+		
+		auto return_enum = enums[0];
+		auto return_type = types_perm[0];
+		auto line = std::string(first ? "\t\tif" : "\t\telse if") + " constexpr(Treturn == types::" + return_enum;
+		first = false;
+		for (size_t j = 1; j < enums.size(); ++j)
+			line += " && Ta" + std::to_string(j) + " == types::" + enums[j];
+		line += ") return (" + return_type + "(*)(";
+		
+		bool firstArg = true;
+		for (size_t j = 1; j < types_perm.size(); ++j) {
+			if (types_perm[j] == "void") continue;
+			if (!firstArg)
+				line += ", ";
+			firstArg = false;
+			line += types_perm[j];
+		}
+		
+		line += "))func;";
+		output.push_back(line);
+	}
+	
+	// Static assert if no match is found
+	output.push_back("\t\telse static_assert(false, \"Unsupported argument combination\");");
+	output.push_back("\t}");
+	
+	// Operator() method
+	output.push_back("\tconstexpr auto operator()(void* func = nullptr) { return apply(func); }");
+	output.push_back("");
+	
+	// Type alias for return type
+	output.push_back("\tusing type = decltype(apply(nullptr));");
+	output.push_back("};");
+}
+
+void generate_no_args_call(std::vector<std::string>& output, const std::vector<std::string>& enum_entries, const std::vector<std::string>& types) {
+	output.push_back("template <types Treturn>");
+	output.push_back("auto call_impl(void* func) {");
+	output.push_back("\tif constexpr(Treturn != types::Void) return trampoline_t<Treturn>{}(func)(); else trampoline_t<Treturn>{}(func)();");
+	output.push_back("}");
+	output.push_back("");
+	
+	output.push_back("inline variant call(types typeReturn, void* func) {");
+	output.push_back("\tswitch(typeReturn) {");
+	for (const auto& enum_entry : enum_entries) {
+		if(enum_entry == "Void")
+			output.push_back("\t\tcase types::Void: call_impl<types::Void>(func); return {};");
+		else output.push_back("\t\tcase types::" + enum_entry + ": return call_impl<types::" + enum_entry + ">(func);");
+	}
+	output.push_back("\t\tdefault: assert(false && \"Unsupported return type\");");
+	output.push_back("\t}");
+	output.push_back("}");
+}
+
+void generate_one_args_call(std::vector<std::string>& output, const std::vector<std::string>& enum_entries, const std::vector<std::string>& types) {
+	output.push_back("template <types Treturn, typename T1>");
+	output.push_back("auto call_impl(void* func, types typeA1, T1 a1) {");
+	output.push_back("\tassert(typeA1 != types::Void);");
+	output.push_back("\tswitch (typeA1) {");
+	for (const auto& enum_entry : enum_entries) {
+		if (enum_entry == "Void") continue;
+		std::string func = "trampoline_t<Treturn, types::" + enum_entry + ">{}(func)(a1);";
+		output.push_back("\t\tbreak; case types::" + enum_entry + ": if constexpr(Treturn != types::Void) return " + func + " else " + func);
+	}
+	output.push_back("\t\tbreak; default: assert(false && \"Unsupported argument combination\");");
+	output.push_back("\t}");
+	output.push_back("}");
+	output.push_back("");
+
+	output.push_back("template <typename T1>");
+	output.push_back("variant call(types typeReturn, void* func, types typeA1, T1 a1) {");
+	output.push_back("\tswitch(typeReturn) {");
+	for (const auto& enum_entry : enum_entries) {
+		if(enum_entry == "Void")
+			output.push_back("\t\tbreak; case types::Void: call_impl<types::Void>(func, typeA1, a1); return {};");
+		else output.push_back("\t\tbreak; case types::" + enum_entry + ": return call_impl<types::" + enum_entry + ", T1>(func, typeA1, a1);");
+	}
+	output.push_back("\t\tbreak; default: assert(false && \"Unsupported return type\");");
+	output.push_back("\t}");
+	output.push_back("}");
+}
+
+void generate_n_args_call(std::vector<std::string>& output, const std::vector<std::string>& enum_entries, const std::vector<std::string>& types, size_t n) {
+	if (n == 0) {
+		generate_no_args_call(output, enum_entries, types);
+		return;
+	}
+	if (n == 1) {
+		generate_one_args_call(output, enum_entries, types);
+		return;
+	}
+
+	// Generate the function template line
+	std::string line = "template <types Treturn";
+	for (size_t i = 0; i < n; ++i)
+		line += ", typename T" + std::to_string(i + 1);
+	line += ">";
+	output.push_back(line);
+
+	// Function signature
+	line = "auto call_impl(void* func";
+	for (size_t i = 0; i < n; ++i)
+		line += ", types typeA" + std::to_string(i + 1) + ", T" + std::to_string(i + 1) + " a" + std::to_string(i + 1);
+	line += ") {";
+	output.push_back(line);
+
+	// Assertions for each argument type
+	for (size_t i = 0; i < n; ++i)
+		output.push_back("\tassert(typeA" + std::to_string(i + 1) + " != types::Void);");
+
+	// Switch-case for argument types using magic_enum to fuse enum values
+	line = "\tswitch (magic_enum::enum_fuse(typeA1";
+	for (size_t i = 1; i < n; ++i)
+		line += ", typeA" + std::to_string(i + 1);
+	line += ").value()) {";
+	output.push_back(line);
+
+	// Generate permutations for the argument types
+	auto enum_permutations = array_permutations(n, enum_entries);
+	std::string func;
+	for (const auto& enums : enum_permutations) {
+		if (std::find(enums.begin(), enums.end(), "Void") != enums.end()) continue;
+
+		line = "\t\tbreak; case magic_enum::enum_fuse(types::" + enums[0];
+		for (size_t i = 1; i < enums.size(); ++i) {
+			line += ", types::" + enums[i];
+		}
+		line += ").value(): ";
+		func = "trampoline_t<Treturn, types::" + enums[0];
+		for (size_t i = 1; i < enums.size(); ++i) {
+			func += ", types::" + enums[i];
+		}
+		func += ">{}(func)(a1";
+		for (int i = 1; i < enums.size(); ++i) {
+			func += ", a" + std::to_string(i + 1);
+		}
+		func += ");";
+		line += "if constexpr(Treturn != types::Void) return " + func + " else " + func;
+		output.push_back(line);
+	}
+
+	output.push_back("\t\tbreak; default: assert(false && \"Unsupported argument combination\");");
+	output.push_back("\t}");
+	output.push_back("}");
+	output.push_back("");
+
+	line = "template <typename T1";
+	for (size_t i = 1; i < n; ++i)
+		line += ", typename T" + std::to_string(i + 1);
+	line += ">";
+	output.push_back(line);
+
+	line = "variant call(types typeReturn, void* func, types typeA1, T1 a1";
+	for(size_t i = 1; i < n; ++i)
+		line += ", types typeA" + std::to_string(i + 1) + ", T" + std::to_string(i + 1) + " a" + std::to_string(i + 1);
+	line += ") {";
+	output.push_back(line);
+	output.push_back("\tswitch(typeReturn) {");
+	for (const auto& enum_entry : enum_entries) {
+		bool isVoid = enum_entry == "Void";
+		line = "\t\tcase types::" + enum_entry + (isVoid ? ": " : ": return ") + "call_impl<types::" + enum_entry + ", T1";
+		for(size_t i = 1; i < n; ++i)
+			line += ", T" + std::to_string(i + 1);
+		line += ">(func, typeA1, a1";
+		for(size_t i = 1; i < n; ++i)
+			line += ", typeA" + std::to_string(i + 1) + ", a" + std::to_string(i + 1);
+		line += ");" + std::string(isVoid ? " return {};" : "");
+		output.push_back(line);
+	}
+	output.push_back("\t\tdefault: assert(false && \"Unsupported return type\");");
+	output.push_back("\t}");
+	output.push_back("}");
+}
+
+// Function to generate calls for various argument configurations (from Python)
+void generate_calls(std::vector<std::string>& output, const std::vector<std::string>& enum_entries, const std::vector<std::string>& types, int args_supported = 1) {
+	// Generate template for the return type and argument types
+	std::string template_str = "template <types Treturn";
+	for (size_t i = 0; i < args_supported; ++i)
+		template_str += ", types Ta" + std::to_string(i + 1) + " = types::Void";
+	template_str += ">";
+	output.push_back(template_str);
+
+	// Forward declaration of the struct `apply_function_types`
+	output.push_back("struct apply_function_types;");
+	output.push_back("");
+
+	// Generate calls for different argument counts (0 to `args_supported`)
+	for (size_t i = 0; i <= args_supported; ++i) {
+		generate_n_args_call(output, enum_entries, types, i);
+		output.push_back(""); // Empty line for separation
+	}
+}
+
+// Function to add the boilerplate code to the file
+void file_boilerplate(std::vector<std::string>& output) {
+	output.push_back("#pragma once");
+	output.push_back("");
+	output.push_back("#include \"${CMAKE_CURRENT_SOURCE_DIR}/magic_enum/include/magic_enum/magic_enum_all.hpp\"");
+	output.push_back("#include \"${CMAKE_CURRENT_SOURCE_DIR}/types.hpp\"");
+	output.push_back("#include <cassert>");
+	output.push_back("");
+}
+
+// Function to parse the file content
+void parse_enum_file(const std::string& file_content, std::vector<std::string>& enum_entries, std::vector<std::string>& types) {
+	// Regular expression pattern to match enum entry and its description
+	std::regex enum_pattern(R"((\w+)\s*,?\s*//\s*->\s*(\w+[\*]?))");
+
+	// Create an iterator to find matches
+	auto begin = std::sregex_iterator(file_content.begin(), file_content.end(), enum_pattern);
+	auto end = std::sregex_iterator();
+
+	// Populate the arrays with the results
+	for (auto it = begin; it != end; ++it) {
+		enum_entries.push_back(it->str(1));  // Enum entry (e.g., Void, Pointer)
+		types.push_back(it->str(2));         // Description (e.g., void, void*)
+	}
+}
+
+int main() {
+	// Read the file content into a string
+	std::string file_content; {
+		std::ifstream file("${CMAKE_CURRENT_SOURCE_DIR}/types.hpp");
+		if (!file) {
+			std::cerr << "Error: Unable to open file types.hpp" << std::endl;
+			return 1;
+		}
+		std::stringstream buffer;
+		buffer << file.rdbuf();
+		file_content = buffer.str();
+	}
+	
+	// Parse the file to extract enum entries and types
+	std::vector<std::string> enum_entries;
+	std::vector<std::string> types;
+	parse_enum_file(file_content, enum_entries, types);
+
+	// Output the parsed enums and types (for debugging)
+	std::cout << "Enum Entries: ";
+	for (const auto& entry : enum_entries) {
+		std::cout << entry << ", ";
+	}
+	std::cout << std::endl;
+
+	std::cout << "Types: ";
+	for (const auto& type : types) {
+		std::cout << type << ", ";
+	}
+	std::cout << std::endl;
+
+	size_t supported_argument_count = 4;
+	std::vector<std::string> output;
+	file_boilerplate(output);
+
+	// Generate apply function types
+	output.push_back("namespace mizu::ffi::wasm {\n");
+	generate_trampoline(output, enum_entries, types, supported_argument_count);
+	output.push_back("\n} // namespace mizu::ffi::wasm");
+
+	// Create the directory if it does not exist
+	std::filesystem::create_directories("${CMAKE_CURRENT_SOURCE_DIR}/gen");
+
+	// Write the output to the apply_function_types.hpp file
+	std::ofstream apply_file("${CMAKE_CURRENT_SOURCE_DIR}/gen/trampoline.hpp");
+	for (const auto& line : output)
+		apply_file << line << std::endl;
+
+
+
+
+	// Clear the output vector and generate the calls
+	output.clear();
+	file_boilerplate(output);
+	output.push_back("#include \"${CMAKE_CURRENT_SOURCE_DIR}/gen/trampoline.hpp\"\n");
+
+	output.push_back("namespace mizu::ffi::wasm {\n");
+	generate_calls(output, enum_entries, types, supported_argument_count);
+	output.push_back("} // namespace mizu::ffi::wasm");
+
+	// Write the output to the calls.hpp file
+	std::ofstream calls_file("${CMAKE_CURRENT_SOURCE_DIR}/gen/calls.hpp");
+	for (const auto& line : output)
+		calls_file << line << std::endl;
+
+	return 0;
+}

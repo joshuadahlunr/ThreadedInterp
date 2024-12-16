@@ -3,6 +3,13 @@
 #include <cstdint>
 #include <array>
 
+#ifdef _WIN32
+    #define MIZU_EXPORT __declspec(dllexport)
+#else
+    #define MIZU_EXPORT
+#endif
+#define MIZU_EXPORT_C extern "C" MIZU_EXPORT
+
 namespace mizu {
 	using reg_t = uint16_t;
 	inline namespace registers {

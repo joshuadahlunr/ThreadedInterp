@@ -1,4 +1,3 @@
-#include "opcode.hpp"
 #define MIZU_IMPLEMENTATION
 #include "operations.hpp"
 #include "operations.parallel.hpp"
@@ -6,7 +5,16 @@
 
 #include "ffi/operations.hpp"
 
-int main(int argc, char** argv) {
+MIZU_EXPORT_C void test_print(char* c) {
+	printf("%s\n", c);
+}
+
+#ifdef _WIN32
+MIZU_EXPORT int dll_main(int argc, char** argv)
+#else
+int main(int argc, char** argv)
+#endif
+{
 	using namespace mizu;
 
 #ifdef _WIN32
@@ -18,9 +26,9 @@ int main(int argc, char** argv) {
 	auto hw = "Hello 世界";
 	opcode program[] = {
 		opcode{find_label, 200}.set_immediate(label2int("thread")),
-		opcode{ffi::push_type_void},
-		opcode{ffi::push_type_pointer},
-		opcode{ffi::create_interface, 201},
+		// opcode{ffi::push_type_void},
+		// opcode{ffi::push_type_pointer},
+		// opcode{ffi::create_interface, 201},
 
 		opcode{load_immediate, 202}.set_host_pointer_lower_immediate(path),
 		opcode{load_upper_immediate, 202}.set_host_pointer_upper_immediate(path),
@@ -29,8 +37,8 @@ int main(int argc, char** argv) {
 		opcode{load_immediate, 204}.set_host_pointer_lower_immediate(hw),
 		opcode{load_upper_immediate, 204}.set_host_pointer_upper_immediate(hw),
 
-		opcode{ffi::load_library, 202, 202},
-		opcode{ffi::load_library_function, 203, 202, 203},
+		// opcode{ffi::load_library, 202, 202},
+		// opcode{ffi::load_library_function, 203, 202, 203},
 
 		opcode{load_immediate, 1}.set_immediate(5),
 		opcode{stack_push_immediate}.set_immediate(1),
@@ -59,8 +67,8 @@ int main(int argc, char** argv) {
 		opcode{load_immediate, 1}.set_immediate(22),
 		opcode{debug_print, 0, 1},
 		// FFI call (print)
-		opcode{add, registers::a(0), 204, 0},
-		opcode{ffi::call, 0, 203, 201},
+		// opcode{add, registers::a(0), 204, 0},
+		// opcode{ffi::call, 0, 203, 201},
 		opcode{halt},
 	};
 
@@ -70,4 +78,9 @@ int main(int argc, char** argv) {
 
 		program->op(program, env.memory.data(), env.stack_boundary, env.stack_pointer);
 	}
+
+	// auto testPrintPtr = mizu::loader::lookup("test_print");
+	// ((void(*)(const char*))testPrintPtr)("Hello World");
+
+	return 0;
 }
