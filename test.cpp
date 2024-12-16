@@ -1,11 +1,19 @@
-#include "opcode.hpp"
 #define MIZU_IMPLEMENTATION
 #include "operations.hpp"
 #include "operations.parallel.hpp"
 
 #include "ffi/operations.hpp"
 
-int main(int argc, char** argv) {
+MIZU_EXPORT_C void test_print(char* c) {
+	printf("%s\n", c);
+}
+
+#ifdef _WIN32
+MIZU_EXPORT int dll_main(int argc, char** argv)
+#else
+int main(int argc, char** argv)
+#endif
+{
 	using namespace mizu;
 
 #ifdef _WIN32
@@ -63,4 +71,9 @@ int main(int argc, char** argv) {
 
 		program->op(program, env.memory.data(), env.stack_boundary, env.stack_pointer);
 	}
+
+	auto testPrintPtr = mizu::loader::lookup("test_print");
+	((void(*)(const char*))testPrintPtr)("Hello World");
+
+	return 0;
 }

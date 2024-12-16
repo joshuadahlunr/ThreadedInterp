@@ -58,7 +58,7 @@ namespace mizu {
 		void* debug_print(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
 #ifdef MIZU_IMPLEMENTATION
 		{
-			printf("u64 = %lu, i64 = %ld, f64 = %f\n", registers[pc->a], *(int64_t*)&registers[pc->a], *(double*)&registers[pc->a]);
+			printf("u64 = %llu, i64 = %lld, f64 = %f\n", registers[pc->a], *(int64_t*)&registers[pc->a], *(double*)&registers[pc->a]);
 			NEXT();
 		}
 #else
