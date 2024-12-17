@@ -4,7 +4,7 @@
 
 #include "opcode.hpp"
 
-namespace mizu { 
+namespace mizu {
 
 	constexpr uint32_t label2int(std::string_view label) {
 		uint32_t out = 0;
@@ -12,13 +12,20 @@ namespace mizu {
 			out |= label[i] << (i * 8);
 		return out;
 	}
-	
+
 	inline namespace operations { extern "C" {
-		inline void* label(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* label(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* find_label(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* find_label(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto needle = *(uint32_t*)&pc->a;
 			registers[pc->out] = 0;
 			for(size_t i = 0; i < memory_size; ++i)
@@ -35,12 +42,32 @@ namespace mizu {
 			opcode* dbg = (opcode*)registers[pc->out];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* halt(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* halt(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			return nullptr;
 		}
+#else
+		;
+#endif
 
-		inline void* debug_print(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* debug_print(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
+			printf("u64 = %lu, i64 = %ld, f64 = %f\n", registers[pc->a], *(int64_t*)&registers[pc->a], *(double*)&registers[pc->a]);
+			NEXT();
+		}
+#else
+		;
+#endif
+
+		void* debug_print_binary(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			constexpr static auto print_binary = [](void* ptr){ // From: https://stackoverflow.com/a/3974138
 				uint8_t* b = (uint8_t*)ptr;
 
@@ -53,288 +80,557 @@ namespace mizu {
 			};
 
 			print_binary(&registers[pc->a]);
-			printf(", u64 = %lu, i64 = %ld, f64 = %f\n", registers[pc->a], *(int64_t*)&registers[pc->a], *(double*)&registers[pc->a]);
-			NEXT();
+			printf(", ");
+			return debug_print(pc, registers, stack, sp);
 		}
+#else
+		;
+#endif
 
-		inline void* load_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* load_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint32_t*)&pc->a;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* load_upper_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* load_upper_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] |= uint64_t(*(uint32_t*)&pc->a) << 32;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(uint64_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(int64_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(uint32_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(int32_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(uint16_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(int16_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(uint8_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* convert_to_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* convert_to_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			*(int8_t*)&registers[pc->out] = registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint64_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int64_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_u64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint64_t*)(sp + registers[pc->a]) = *(uint64_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_i64(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint64_t*)(sp + registers[pc->a]) = *(uint64_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint32_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int32_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_u32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint32_t*)(sp + registers[pc->a]) = *(uint32_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_i32(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint32_t*)(sp + registers[pc->a]) = *(uint32_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint16_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int16_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_u16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint16_t*)(sp + registers[pc->a]) = *(uint16_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_i16(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint16_t*)(sp + registers[pc->a]) = *(uint16_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint8_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_load_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_load_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int8_t*)(sp + registers[pc->a]);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_u8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint8_t*)(sp + registers[pc->a]) = *(uint8_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_store_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_store_i8(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(uint8_t*)(sp + registers[pc->a]) = *(uint8_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_push(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_push(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			sp -= registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_push_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_push_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto& size = *(uint32_t*)&pc->a;
 			sp -= size;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_pop(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_pop(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			sp += registers[pc->a];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* stack_pop_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* stack_pop_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto& size = *(uint32_t*)&pc->a;
 			sp += size;
 			NEXT();
 		}
+#else
+		;
+#endif
 
 		// Interpret register as signed
-		inline void* jump_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* jump_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto a = registers[pc->a];
 			registers[pc->out] = (uint64_t)pc;
 			pc += *(int64_t*)&a - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
 		// Interpret arguments as signed
-		inline void* jump_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* jump_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = (uint64_t)pc;
 			pc += *(int32_t*)&pc->a - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* jump_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* jump_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = (uint64_t)pc;
 			pc = (opcode*)registers[pc->a] - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
 		// Interpret register as signed
-		inline void* branch_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* branch_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = (uint64_t)pc;
 			if(registers[pc->a])
 				pc += *(int64_t*)&registers[pc->b] - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
 		// Interpret arguments as signed
-		inline void* branch_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* branch_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = (uint64_t)pc;
 			if(registers[pc->a])
 				pc += *(int16_t*)&pc->b - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* branch_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* branch_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = (uint64_t)pc;
 			if(registers[pc->a])
 				pc = (opcode*)registers[pc->b] - 1;
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] == registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_not_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_not_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] != registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_less(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_less(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] < registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_less_signed(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_less_signed(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int64_t*)&registers[pc->a] < *(int64_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_greater_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_greater_equal(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] >= registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* set_if_greater_equal_signed(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* set_if_greater_equal_signed(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int64_t*)&registers[pc->a] >= *(int64_t*)&registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* add(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* add(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] + registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* subtract(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* subtract(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] - registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* multiply(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* multiply(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] * registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* divide(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* divide(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] / registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* modulus(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* modulus(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] % registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* shift_left(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* shift_left(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] << registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* shift_right_logical(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* shift_right_logical(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] >> registers[pc->b];
 			NEXT();
 		}
-		inline void* shift_right_arithmetic(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+#else
+		;
+#endif
+
+		void* shift_right_arithmetic(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = *(int64_t*)&registers[pc->a] >> registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* bitwise_xor(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* bitwise_xor(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] ^ registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* bitwise_and(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* bitwise_and(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] & registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* bitwise_or(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* bitwise_or(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			registers[pc->out] = registers[pc->a] | registers[pc->b];
 			NEXT();
 		}
+#else
+		;
+#endif
 	}}
 }

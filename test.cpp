@@ -1,3 +1,5 @@
+#include "opcode.hpp"
+#define MIZU_IMPLEMENTATION
 #include "operations.hpp"
 #include "operations.parallel.hpp"
 

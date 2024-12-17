@@ -3,7 +3,7 @@
 
 #include "opcode.hpp"
 
-namespace mizu { 
+namespace mizu {
 	// NOTE: Not a valid operation
 	inline std::thread* new_thread(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
 		registers_and_stack env;
@@ -18,33 +18,53 @@ namespace mizu {
 	inline namespace operations { extern "C" {
 
 		// Interpret register as signed
-		inline void* fork_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* fork_relative(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto threadPC = pc + *(int64_t*)&registers[pc->a];
 			registers[pc->out] = (uint64_t)new_thread(threadPC, registers, stack, sp);
 			NEXT();
 		}
+#else
+		;
+#endif
 
 		// Interpret arguments as signed
-		inline void* fork_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* fork_relative_immediate(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto threadPC = pc + *(int32_t*)&pc->a;
 			registers[pc->out] = (uint64_t)new_thread(threadPC, registers, stack, sp);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* fork_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp) {
+		void* fork_to(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			auto threadPC = (opcode*)registers[pc->a];
 			registers[pc->out] = (uint64_t)new_thread(threadPC, registers, stack, sp);
 			NEXT();
 		}
+#else
+		;
+#endif
 
-		inline void* join_thread(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp){
+		void* join_thread(opcode* pc, uint64_t* registers, uint8_t* stack, uint8_t* sp)
+#ifdef MIZU_IMPLEMENTATION
+		{
 			std::thread* thread = (std::thread*)registers[pc->a];
 			if(thread) {
 				if(thread->joinable()) thread->join();
-				delete thread; 
+				delete thread;
 			}
 			registers[pc->a] = 0;
 			NEXT();
 		}
+#else
+		;
+#endif
 	}}
 }
