@@ -18,9 +18,13 @@ namespace mizu {
 		operation_t op;
 		reg_t out, a, b;
 
-		opcode& set_immediate(const uint32_t value) { *(uint32_t*)&a = value; return *this; }
-		opcode& set_immediate_signed(const int32_t value) { *(int32_t*)&a = value; return *this; }
-		opcode& set_branch_immediate(const int16_t value) { *(int16_t*)&b = value; return *this; }
+		opcode& set_immediate(const uint32_t value) { (uint32_t&)a = value; return *this; }
+		opcode& set_immediate_signed(const int32_t value) { (int32_t&)a = value; return *this; }
+		opcode& set_branch_immediate(const int16_t value) { (int16_t&)b = value; return *this; }
+
+		opcode& set_immediate_f32(const float value) { (float&)a = value; return *this; }
+		opcode& set_lower_immediate_f64(const double value) { return set_immediate((uint64_t&)value); }
+		opcode& set_upper_immediate_f64(const double value) { return set_immediate(((uint64_t&)value) >> 32); }
 
 		opcode& set_host_pointer_lower_immediate(const void* ptr) { set_immediate((std::size_t)ptr); return *this; }
 		opcode& set_host_pointer_upper_immediate(const void* ptr) { set_immediate(((std::size_t)ptr) >> 32); return *this; }

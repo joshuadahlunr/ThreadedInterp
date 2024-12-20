@@ -2,6 +2,7 @@
 #define MIZU_IMPLEMENTATION
 #include "operations.hpp"
 #include "operations.parallel.hpp"
+#include "operations.float.hpp"
 
 #include "ffi/operations.hpp"
 
@@ -45,6 +46,12 @@ int main(int argc, char** argv) {
 		opcode{stack_load_i32, 3, 0, 0},
 		opcode{debug_print, 0, 3},
 		opcode{join_thread, 0, 5, 0},
+
+		opcode{load_immediate, 6}.set_immediate(7),
+		opcode{convert_to_f64, 6, 6},
+		opcode{convert_to_f64, 7, 3},
+		opcode{add_f64, 8, 6, 7},
+		opcode{debug_print, 0, 8},
 		opcode{halt},
 
 		// Thread
